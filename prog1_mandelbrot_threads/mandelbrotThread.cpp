@@ -1,7 +1,10 @@
 #include <stdio.h>
 #include <pthread.h>
+#include <iostream>
 
 #include "CycleTimer.h"
+
+#define NUM_CORES 8
 
 typedef struct {
     float x0, x1;
@@ -20,7 +23,8 @@ extern void mandelbrotSerial(
     int width, int height,
     int startRow, int numRows,
     int maxIterations,
-    int output[]);
+    int output[], 
+    int increment = 1);
 
 
 //
@@ -28,13 +32,24 @@ extern void mandelbrotSerial(
 //
 // Thread entrypoint.
 void* workerThreadStart(void* threadArgs) {
-
+    double startTime = CycleTimer::currentSeconds();
     WorkerArgs* args = static_cast<WorkerArgs*>(threadArgs);
 
-    // TODO: Implement worker thread here.
+    int numRowsPerThread = args->height/args->numThreads;
+    int startRow = args->threadId;
+    unsigned int lastRow = startRow + (args->numThreads*numRowsPerThread);
+    if(lastRow >= args->height) {
+        lastRow = startRow + (args->numThreads*(numRowsPerThread-1));
+    }
+    mandelbrotSerial(args->x0, args->y0, args->x1, args->y1,
+                     args->width, args->height,
+                     startRow, lastRow,
+                     args->maxIterations,
+                     args->output, args->numThreads);
 
-    printf("Hello world from thread %d\n", args->threadId);
-
+    double endTime = CycleTimer::currentSeconds();
+    printf("Thread %d: %.3f ms\n", args->threadId, 1000.f * (endTime - startTime));
+    
     return NULL;
 }
 
@@ -49,6 +64,7 @@ void mandelbrotThread(
     int width, int height,
     int maxIterations, int output[])
 {
+    printf("Running threaded version\n");
     const static int MAX_THREADS = 32;
 
     if (numThreads > MAX_THREADS)
@@ -61,16 +77,33 @@ void mandelbrotThread(
     WorkerArgs args[MAX_THREADS];
 
     for (int i=0; i<numThreads; i++) {
-        // TODO: Set thread arguments here.
+        args[i].x0 = x0;
+        args[i].x1 = x1;
+        args[i].y0 = y0;
+        args[i].y1 = y1;
+        args[i].width = width;
+        args[i].height = height;
+        args[i].maxIterations = maxIterations;
+        args[i].output = output;
+        args[i].numThreads = numThreads;
         args[i].threadId = i;
     }
 
     // Fire up the worker threads.  Note that numThreads-1 pthreads
     // are created and the main app thread is used as a worker as
     // well.
+    int core_numbers[NUM_CORES] = {0, 1, 2, 3, 4, 5, 6, 7}; // Assuming a 4-core system
 
-    for (int i=1; i<numThreads; i++)
-        pthread_create(&workers[i], NULL, workerThreadStart, &args[i]);
+    for (int i=1; i<numThreads; i++) {
+        pthread_attr_t attr;
+        cpu_set_t cpuset;
+
+        pthread_attr_init(&attr);
+        CPU_ZERO(&cpuset);
+        CPU_SET(core_numbers[i%NUM_CORES], &cpuset);
+        pthread_attr_setaffinity_np(&attr, sizeof(cpu_set_t), &cpuset);
+        pthread_create(&workers[i], &attr, workerThreadStart, &args[i]);
+    }
 
     workerThreadStart(&args[0]);
 

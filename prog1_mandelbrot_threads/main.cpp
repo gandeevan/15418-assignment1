@@ -9,7 +9,8 @@ extern void mandelbrotSerial(
     int width, int height,
     int startRow, int numRows,
     int maxIterations,
-    int output[]);
+    int output[], 
+    int increment = 1);
 
 extern void mandelbrotThread(
     int numThreads,
@@ -130,7 +131,7 @@ int main(int argc, char** argv) {
     double minSerial = 1e30;
     for (int i = 0; i < 5; ++i) {
         double startTime = CycleTimer::currentSeconds();
-        mandelbrotSerial(x0, y0, x1, y1, width, height, 0, height, maxIterations, output_serial);
+        mandelbrotSerial(x0, y0, x1, y1, width, height, 0, height-1, maxIterations, output_serial);
         double endTime = CycleTimer::currentSeconds();
         minSerial = std::min(minSerial, endTime - startTime);
     }
