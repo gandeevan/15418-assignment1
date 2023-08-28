@@ -237,10 +237,68 @@ void clampedExpSerial(float* values, int* exponents, float* output, int N) {
 }
 
 void clampedExpVector(float* values, int* exponents, float* output, int N) {
-  // TODO: Implement your vectorized version of clampedExpSerial here
+  const float maxValue = 9.999999f;
+
+  __cmu418_vec_float x; // vector of values
+  __cmu418_vec_int y; // vector of exponents
+  __cmu418_vec_float result; // vector of results
+
+  __cmu418_mask allOnesMask = _cmu418_init_ones();   // a mask with all the lanes activated
+  __cmu418_mask allZeroesMask = _cmu418_init_ones(0); // a mask with all the lanes deactivated
+
+  // a vector of SIMD length with all the elements to 1
+  __cmu418_vec_int allOnesVec;
+  _cmu418_vset_int(allOnesVec, 1, allOnesMask);
+
+  // a vector of SIMD length with all the elements set to 0
+  __cmu418_vec_int allZeroesVec;
+  _cmu418_vset_int(allZeroesVec, 0, allOnesMask);
+
+  __cmu418_vec_float maxValueVec;
+  _cmu418_vset_float(maxValueVec, maxValue, allOnesMask);
 
   for (int i=0; i<N; i+=VECTOR_WIDTH) {
+    // The length of the array isn't gauranteed to be a multiple of the SIMD_LENGTH
+    // So, we need a mask to deactivate the SIMD_LENGTH-LEN(ARRAY)%SIMD_LENGTH
+    // lanes in the last iteration of the for loop.
+    __cmu418_mask remainingElementsMask;
+    int remaining = N - i;
+    if(remaining >= VECTOR_WIDTH) {
+      remainingElementsMask = allOnesMask;
+    } else {
+      remainingElementsMask = _cmu418_init_ones(remaining);
+    }
 
+    _cmu418_vload_float(x, values+i, remainingElementsMask);
+    _cmu418_vload_int(y, exponents+i, remainingElementsMask);
+    _cmu418_vset_float(result, 1, allOnesMask);
+
+    // compute the mask of the elements whose pow == 0
+    __cmu418_mask zeroPowersMask = _cmu418_init_ones(0);
+    _cmu418_veq_int(zeroPowersMask, y, allZeroesVec, remainingElementsMask);
+
+    // compute the mask of elements where pow > 0
+    __cmu418_mask nonZeroPowersMask = _cmu418_mask_not(zeroPowersMask);      
+    nonZeroPowersMask = _cmu418_mask_and(nonZeroPowersMask, remainingElementsMask);
+
+    // loop until there exists at least one element where pow > 0      
+    while(_cmu418_cntbits(nonZeroPowersMask) > 0) {
+        // for each element where pow > 0, multiply the result vector by the x vector and 
+        // store the computation back in the result vector
+        _cmu418_vmult_float(result, x, result, nonZeroPowersMask);
+
+        // reduce the power of each element where pow > 0 by 1 and 
+        // recompute the nonZeroPowersMask
+        _cmu418_vsub_int(y, y, allOnesVec, nonZeroPowersMask);
+        _cmu418_vgt_int(nonZeroPowersMask, y, allZeroesVec, nonZeroPowersMask);
+    }
+    
+    // clamp the results to 9.999999f
+    __cmu418_mask clampedMask = allZeroesMask;
+    _cmu418_vgt_float(clampedMask, result, maxValueVec, remainingElementsMask);
+    _cmu418_vset_float(result, 9.999999f, clampedMask);
+
+    _cmu418_vstore_float(output+i, result, remainingElementsMask);
   }
 
 }
