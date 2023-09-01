@@ -79,7 +79,6 @@
   #include <sys/types.h>
   #include <sys/stat.h>
   #include <sys/param.h>
-  #include <sys/sysctl.h>
   #include <vector>
   #include <algorithm>
 #endif // ISPC_USE_PTHREADS
@@ -92,6 +91,12 @@
 #include <assert.h>
 #include <string.h>
 #include <algorithm>
+
+#ifdef __linux__
+#include <linux/sysctl.h>
+#else
+#include <sys/sysctl.h>
+#endif
 
 // Signature of ispc-generated 'task' functions
 typedef void (*TaskFuncType)(void *data, int threadIndex, int threadCount,
