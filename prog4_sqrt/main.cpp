@@ -6,6 +6,8 @@
 #include "CycleTimer.h"
 #include "sqrt_ispc.h"
 
+#define SIMD_WIDTH 4
+
 using namespace ispc;
 
 extern void sqrtSerial(int N, float startGuess, float* values, float* output);
@@ -31,7 +33,16 @@ int main() {
     {
         // random input values
         values[i] = .001f + 2.998f * static_cast<float>(rand()) / RAND_MAX;
-        // TODO: Try different input values here.
+        
+        /** For best speed-up **/
+        // values[i] = 2.99f;
+
+        /** For worst speed-up **/
+        // if(i%SIMD_WIDTH==0)
+        //     values[i] = 2.99;
+        // else
+        //     values[i] = 1;
+
         output[i] = 0.f;
     }
 
