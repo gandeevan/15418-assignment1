@@ -68,7 +68,12 @@ export void mandelbrot_ispc_withtasks(uniform float x0, uniform float y0,
                                       uniform int output[])
 {
 
-    uniform int taskCount = 32;
+    uniform int taskCount = 2;
+    
+    /** To maximize speed-up */
+    // uniform int taskCount = 32;
+
+
     uniform int rowsPerTask = height / taskCount;
 
     // create 2 tasks
